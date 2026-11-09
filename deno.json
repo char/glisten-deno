@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "build": "deno run -A tools/prepare.ts && deno run --config=tools/deno.json -A tools/build.ts",
+    "check": "deno check mod.ts filename.ts build/mod.ts tests/*.ts compat/*.ts && deno check --config=tools/deno.json tools/*.ts",
+    "test": "deno test -A tests compat",
+    "fmt": "deno fmt --exclude=build,.cache"
+  },
+  "fmt": {
+    "exclude": [
+      "build/",
+      ".cache/"
+    ]
+  }
+}

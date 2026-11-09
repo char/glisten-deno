@@ -1,0 +1,10 @@
+{
+  "name": "@char/glisten-deno",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./filename": "./filename.ts",
+    "./host": "./dist/host/mod.ts",
+    "./manifest": "./dist/manifest.json"
+  }
+}

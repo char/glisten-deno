@@ -1,0 +1,10 @@
+{
+  "lock": "./deno.lock",
+  "imports": {
+    "@char/justin": "jsr:@char/justin@0.4.2",
+    "#/": "../.cache/upstream/",
+    "avril:fs": "../compat/avril-fs.ts",
+    "avril:std": "../compat/avril-std.ts",
+    "avril:test": "../compat/avril-test.ts"
+  }
+}
