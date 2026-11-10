@@ -55,7 +55,7 @@ try {
       digest,
       (byte) => byte.toString(16).padStart(2, "0"),
     ).join("");
-    const file = `${name}-${hash.slice(0, 16)}.wasm`;
+    const file = `${name}.wasm`;
     await Deno.writeFile(new URL(`modules/${file}`, destination), bytes);
     entries[name] = {
       file,
