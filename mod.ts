@@ -1,4 +1,4 @@
-import { Highlighter as Host, ResourceError } from "./build/dist/host/mod.ts";
+import { Highlighter as Host } from "./build/dist/host/mod.ts";
 import data from "./build/dist/manifest.json" with { type: "json" };
 
 export { languageFor } from "./filename.ts";
@@ -26,7 +26,8 @@ const grammars = new Map(Object.entries(manifest.languages));
 const baseURL = new URL("./build/dist/modules/", import.meta.url);
 
 export type GrammarLoader = (url: URL) => Promise<Uint8Array>;
-export type Options = NonNullable<ConstructorParameters<typeof Host>[0]> & {
+type HostOptions = NonNullable<ConstructorParameters<typeof Host>[0]>;
+export type Options = Omit<HostOptions, "loadLanguage"> & {
   load?: GrammarLoader;
   baseURL?: URL;
 };
@@ -59,59 +60,47 @@ export class IntegrityError extends Error {
 
 export class Highlighter {
   private readonly host: Host;
-  private readonly load: GrammarLoader;
-  private readonly baseURL: URL;
-  private readonly loaded = new Set<string>();
-  private readonly pending = new Map<string, Promise<void>>();
 
   constructor(
     { load = readGrammar, baseURL: assets = baseURL, ...options }: Options = {},
   ) {
-    this.host = new Host(options);
-    this.load = load;
-    this.baseURL = new URL(assets);
-  }
-
-  private async add(language: string): Promise<boolean> {
-    const name = canonicalLanguage(language);
-    if (name === null || this.loaded.has(name)) return false;
-    let pending = this.pending.get(name);
-    if (!pending) {
-      const artifact = grammars.get(name)!;
-      const url = new URL(artifact.file, this.baseURL);
-      pending = (async () => {
-        const bytes = new Uint8Array(await this.load(url));
-        const digest = new Uint8Array(
-          await crypto.subtle.digest("SHA-256", bytes),
-        );
-        const hash = Array.from(
-          digest,
-          (byte) => byte.toString(16).padStart(2, "0"),
-        ).join("");
-        if (hash !== artifact.sha256) throw new IntegrityError(url);
-        await this.host.add(await WebAssembly.compile(bytes));
-        this.loaded.add(name);
-      })().finally(() => this.pending.delete(name));
-      this.pending.set(name, pending);
-    }
-    await pending;
-    return true;
+    const base = new URL(assets);
+    const modules = new Map<string, Promise<WebAssembly.Module>>();
+    this.host = new Host({
+      ...options,
+      loadLanguage: async (language) => {
+        const name = canonicalLanguage(language);
+        if (name === null) return undefined;
+        let module = modules.get(name);
+        if (!module) {
+          const artifact = grammars.get(name)!;
+          const url = new URL(artifact.file, base);
+          module = (async () => {
+            const bytes = new Uint8Array(await load(url));
+            const digest = new Uint8Array(
+              await crypto.subtle.digest("SHA-256", bytes),
+            );
+            const hash = Array.from(
+              digest,
+              (byte) => byte.toString(16).padStart(2, "0"),
+            ).join("");
+            if (hash !== artifact.sha256) throw new IntegrityError(url);
+            return await WebAssembly.compile(bytes);
+          })();
+          modules.set(name, module);
+          void module.catch(() => modules.delete(name));
+        }
+        return await module;
+      },
+    });
   }
 
   async highlight(
     language: string,
     source: string | Uint8Array,
   ): Promise<string | null> {
-    if (canonicalLanguage(language) === null) return null;
-    await this.add(language);
-    for (;;) {
-      const result = this.host._process(language, source);
-      if (result.status === "resource") throw new ResourceError();
-      const added = await Promise.all(
-        result.missing.map((name) => this.add(name)),
-      );
-      if (added.some(Boolean)) continue;
-      return this.host.render(source, result);
-    }
+    const name = canonicalLanguage(language);
+    if (name === null) return null;
+    return await this.host.highlightFull(name, source);
   }
 }

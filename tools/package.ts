@@ -69,45 +69,37 @@ export async function copyRuntime(
       continue;
     }
 
-    let contents = await Deno.readTextFile(input);
-    if (path === "host/memory.ts") {
-      // Deno's WebAssembly memory type also admits SharedArrayBuffer.
-      const declaration = "buffer: ArrayBuffer;";
-      if (!contents.includes(declaration)) {
-        throw new Error(
-          "Upstream arena buffer declaration changed; revisit its Deno adaptation",
-        );
-      }
-      contents = contents.replace(
-        declaration,
-        'buffer: WebAssembly.Memory["buffer"];',
-      );
-    }
-    contents = rewriteReferences(path, contents, (specifier, kind) => {
-      if (kind !== "module") return undefined;
-      if (specifier.startsWith("#/") || specifier.startsWith(".")) {
-        const target = specifier.startsWith("#/")
-          ? new URL(specifier.slice(2), source)
-          : new URL(specifier, input);
-        if (!target.href.startsWith(source.href)) {
+    const contents = rewriteReferences(
+      path,
+      await Deno.readTextFile(input),
+      (specifier, kind) => {
+        if (kind !== "module") return undefined;
+        if (specifier.startsWith("#/") || specifier.startsWith(".")) {
+          const target = specifier.startsWith("#/")
+            ? new URL(specifier.slice(2), source)
+            : new URL(specifier, input);
+          if (!target.href.startsWith(source.href)) {
+            throw new Error(
+              `Runtime import escapes upstream source: ${specifier}`,
+            );
+          }
+          pending.push(target.href.slice(source.href.length));
+          let replacement = relative(
+            dirname(fromFileUrl(input)),
+            fromFileUrl(target),
+          ).replaceAll("\\", "/");
+          if (!replacement.startsWith(".")) replacement = "./" + replacement;
+          return replacement;
+        }
+        const dependency = imports[specifier];
+        if (!dependency?.startsWith("jsr:")) {
           throw new Error(
-            `Runtime import escapes upstream source: ${specifier}`,
+            `Unexpected upstream runtime dependency: ${specifier}`,
           );
         }
-        pending.push(target.href.slice(source.href.length));
-        let replacement = relative(
-          dirname(fromFileUrl(input)),
-          fromFileUrl(target),
-        ).replaceAll("\\", "/");
-        if (!replacement.startsWith(".")) replacement = "./" + replacement;
-        return replacement;
-      }
-      const dependency = imports[specifier];
-      if (!dependency?.startsWith("jsr:")) {
-        throw new Error(`Unexpected upstream runtime dependency: ${specifier}`);
-      }
-      return dependency;
-    });
+        return dependency;
+      },
+    );
     await Deno.writeTextFile(output, contents);
   }
 }
