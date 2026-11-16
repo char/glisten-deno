@@ -1,4 +1,4 @@
-import { compileLanguage } from "#/compiler/language.ts";
+import { compileLanguage } from "#/compiler/mod.ts";
 import { languages } from "#/languages/mod.ts";
 import { buildModule } from "#/tools/module.ts";
 import { fromFileUrl, toFileUrl } from "jsr:@std/path@^1.0.6";
