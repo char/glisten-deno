@@ -1,5 +1,5 @@
 import { compileLanguage } from "#/compiler/mod.ts";
-import { languages } from "#/languages/mod.ts";
+import * as languages from "#/languages/mod.ts";
 import { buildModule } from "#/tools/module.ts";
 import { fromFileUrl, toFileUrl } from "jsr:@std/path@^1.0.6";
 import { copyEntrypoints, copyRuntime, installBuild } from "./package.ts";
@@ -42,8 +42,7 @@ const catalog = [];
 try {
   await copyRuntime(new URL("upstream/", cache), destination);
   await Deno.mkdir(new URL("modules/", destination));
-  for (const name of Object.keys(languages).sort()) {
-    const { default: source } = await languages[name]();
+  for (const [name, source] of Object.entries(languages)) {
     const compiled = compileLanguage(source);
     const { manifest } = compiled;
     if (manifest.language !== name) {
